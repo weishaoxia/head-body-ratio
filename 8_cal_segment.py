@@ -46,7 +46,7 @@ if True:
             crop_left = crop_width // 2
             crop_right = width - (crop_width - crop_left)
         
-            # 从中心裁剪图像
+            # Crop the image from the center.
             cropped_image = data[crop_top:crop_bottom, crop_left:crop_right, :]
             padded_image = cropped_image
 
@@ -117,7 +117,7 @@ if True:
             return image
 
     transform=transforms.Compose({
-        #转化为Tensor
+        # Convert to tensor
         transforms.ToTensor()
     })
 
@@ -138,16 +138,20 @@ if True:
         torch.backends.cudnn.deterministic = True
 
 
-# %%
-label_list = ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"]
+# dcm_table.sort_values("height")
+# unique_counts = dcm_table.groupby('folder')['Age'].nunique()
+# unique_counts.loc[unique_counts == 2]
 
-bak = str(sys.argv[1]) # "black" "white"
+# %%
+# "head","shoulder_left","shoulder_right","ankle_left","ankle_right",
+label_list = ["head","shoulder_left","shoulder_right","ankle_left","ankle_right","hip_left","hip_right"]
+
+bak = str(sys.argv[1]) #"black"
 threshood = 0
-model_type = str(sys.argv[2]) # "resnet152" #"tu-hrnet_w32"
-suffix = str(sys.argv[3]) # run suffix
+model_type = str(sys.argv[2]) #"resnet152" #"tu-hrnet_w32"
+suffix = str(sys.argv[3]) #"2024-07-08"
 pose = "direct"
 
-# performance of models 
 if model_type == "resnet152":
     # resnet152
     black_label_model_dict = {
@@ -155,14 +159,18 @@ if model_type == "resnet152":
         "shoulder_left":"145", # 0.0625
         "shoulder_right":"113", # 0.059
         "ankle_left":"110", # 0.0812
-        "ankle_right":"132" # 0.0748
+        "ankle_right":"132", # 0.0748
+        "hip_left":"113", # 0.064
+        "hip_right":"148" # 0.083
     }
     white_label_model_dict = {
         "head":"110", # 0.0114
         "shoulder_left":"122", # 0.0877
         "shoulder_right":"138", # 0.0694
         "ankle_left":"116", # 0.0828
-        "ankle_right":"130" # 0.0856
+        "ankle_right":"130", # 0.0856
+        "hip_left":"135", # 0.0803
+        "hip_right":"127" # 0.0785
     }
 elif model_type == "tu-hrnet_w32":
     # tu-hrnet_w32
@@ -171,19 +179,23 @@ elif model_type == "tu-hrnet_w32":
         "shoulder_left":"119", # 0.0678
         "shoulder_right":"138", # 0.0657
         "ankle_left":"131", # 0.0812
-        "ankle_right":"136" # 0.0748
+        "ankle_right":"136", # 0.0748
+        "hip_left":"101",
+        "hip_right":"101"
     }
     white_label_model_dict = {
         "head":"150", # 0.0114
         "shoulder_left":"125", # 0.0714
         "shoulder_right":"142", # 0.0823
         "ankle_left":"139", # 0.0936
-        "ankle_right":"113" # 0.0925
+        "ankle_right":"113", # 0.0925
+        "hip_left":"101",
+        "hip_right":"101"
     }
 
 
 # %%
-# output
+# out put
 table_path = "/storageC/shiwei/work/DXA/8_segment_result/segment_table_"+bak+"_"+suffix+".tsv"
 
 if os.path.isfile(table_path):
@@ -204,9 +216,10 @@ for label in label_list:
     set_seed(int(bestmodel))
     print(label, flush=True)
     
-    # Apply to all images for segmentation.
+    # Apply the model to all images for segmentation
     if True:
         best_model_name = "/storageC/shiwei/work/DXA/7_segment_trains_"+label+"_"+bak+"_direct/models_test_"+model_type+"_"+bestmodel+"/"+model_type+"_model_best_"+bestmodel+".pth"
+        # best_model_name = "/storageC/shiwei/work/DXA/segment_trains_"+label+"_"+bak+"_direct/models_test_"+bestmodel+"/"+model_type+"_model_best_"+bestmodel+".pth" # old
         model = smp.Unet(
             encoder_name=model_type,  
             encoder_weights='imagenet',
@@ -220,7 +233,7 @@ for label in label_list:
 
         input_path = "/storageC/shiwei/work/DXA/6_pose_predicted_"+bak+"_png1/"
         input_list = os.listdir(input_path)
-
+        # 只取.png
         input_list = [file for file in input_list if file.endswith('.png')]
 
         output_path = "/storageC/shiwei/work/DXA/8_segment_predicted_"+label+"_"+ bak +"/"+ suffix +"/"
@@ -260,6 +273,8 @@ for label in label_list:
         image = cv2.cvtColor(data, cv2.COLOR_BGR2RGB)
         image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
 
+        # plt.imshow(image)
+        # plt.show()
 
         _, binary_image = cv2.threshold(image.astype(np.uint8), threshood, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -272,7 +287,7 @@ for label in label_list:
         dcm_table.loc[dcm_table.Image == input_.split(".")[0], [label+"_x", label+"_y", label+"_w", label+"_h"]] = x, y, w, h
 
     dcm_table.to_csv("/storageC/shiwei/work/DXA/8_segment_result/segment_table_"+bak+"_"+suffix+".tsv",sep="\t",index=False)
-    # shutil.rmtree(input_path) # for test
+    # shutil.rmtree(input_path) # During testing, the data is deleted after processing; in the final version, it will not be deleted.
 
     del bestmodel
 print("Done")
