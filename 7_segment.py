@@ -74,7 +74,7 @@ def scale_img(data, transf, target_size=(960, 384)):
         crop_left = crop_width // 2
         crop_right = width - (crop_width - crop_left)
     
-        # 从中心裁剪图像
+        # Crop the image from the center
         cropped_image = data[crop_top:crop_bottom, crop_left:crop_right, :]
         padded_image = cropped_image
 
@@ -153,7 +153,7 @@ class Segmentation_test_Dataset(Dataset):
         return image
 
 transform=transforms.Compose({
-    #转化为Tensor
+    # Convert to tensor
     transforms.ToTensor()
 })
 
@@ -170,11 +170,11 @@ class SegmentationDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.image_dir, self.images[idx])
-        mask_path = os.path.join(self.mask_dir, self.images[idx])  # 确保掩码和图像文件名匹配
+        mask_path = os.path.join(self.mask_dir, self.images[idx])  # Ensure that the mask and image filenames match
         image = cv2.imread(img_path) # Image.open(img_path).convert("RGB")
         image = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
-        mask = cv2.imread(mask_path) # Image.open(mask_path).convert("L")  # 掩码通常是单通道图像
-        mask = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)#掩膜转为灰度图
+        mask = cv2.imread(mask_path) # Image.open(mask_path).convert("L")  # Masks are usually single-channel images
+        mask = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)# Convert the mask to a grayscale image.
 
         if self.transform is not None:
             image = self.transform(image)
@@ -183,7 +183,7 @@ class SegmentationDataset(Dataset):
         return image, mask
     
 transform=transforms.Compose({
-    #转化为Tensor
+    # Convert to tensor
     transforms.ToTensor()
 })
 
@@ -219,28 +219,36 @@ def set_seed(seed):
 
 # %%
 # json2png
-label_list = ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"]
-label_index = {"head":0, "shoulder_left":1,"shoulder_right":2,"ankle_left":3,"ankle_right":4}
-label_shape = {"head":"polygon", "shoulder_left":"point","shoulder_right":"point","ankle_left":"point","ankle_right":"point"}
+label_list = ["head","shoulder_left","shoulder_right","ankle_left","ankle_right","hip_left","hip_right"]
+label_index = {"head":0, "shoulder_left":1,"shoulder_right":2,"ankle_left":3,"ankle_right":4,"hip_left":5,"hip_right":6}
+label_shape = {"head":"polygon", "shoulder_left":"point","shoulder_right":"point","ankle_left":"point","ankle_right":"point","hip_left":"point","hip_right":"point"}
 
-bak = str(sys.argv[1]) # "black" "white"
+bak = str(sys.argv[1]) #"black"
 pose = "direct"
 iftrain = True
 model_type = str(sys.argv[2]) # tu-hrnet_w48 resnet152 tu-hrnet_w32
-suffix = str(sys.argv[3]) # run suffix
+suffix = str(sys.argv[3])
 
 seed = int(sys.argv[4])
 set_seed(seed)
 
-for label in ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"]:
+for label in ["head","shoulder_left","shoulder_right","ankle_left","ankle_right","hip_left","hip_right"]:
     print(label, flush=True)
     torch.cuda.empty_cache()
 
-    mask_path = "/storageC/shiwei/work/DXA/7_segment_masked_" + bak + "_"+ pose 
+    mask_path = "/storageC/shiwei/work/DXA/7_segment_masked_" + bak + "_"+ pose # + "_50"
     outmask_path = "/storageC/shiwei/work/DXA/7_segment_trains_"+label+"_"+ bak + "_"+ pose +"/mask"+ "_" + suffix
     outimg_path = "/storageC/shiwei/work/DXA/7_segment_trains_"+label+"_"+ bak+ "_"+ pose +"/image"+ "_" + suffix
     model_path = "/storageC/shiwei/work/DXA/7_segment_trains_"+label+"_"+ bak+ "_"+ pose +"/models"+ "_" + suffix
-    png_path = "/storageC/shiwei/work/DXA/6_pose_predicted_"+bak+"_png"
+    png_path = "/storageC/shiwei/work/DXA/6_pose_predicted_"+bak+"_png1"
+
+    # if os.path.isdir(outmask_path):
+    #     file_names = os.path.split(outmask_path)[-1].split("_")
+    #     if len(file_names) == 2:
+    #         suffix = suffix + "_1"
+    #     elif len(file_names) > 2:
+    #         suffix = suffix + "_" + str(int(file_names[-1]) +1)
+    #     outmask_path = "/storageC/shiwei/work/DXA/segment_trains_"+label+"_"+ bak + "_"+ pose +"/mask"+ "_" + suffix
 
     if os.path.exists(outmask_path):
         shutil.rmtree(outmask_path)
@@ -255,7 +263,7 @@ for label in ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"
     os.makedirs(model_path, exist_ok=True)
 
     # %%
-    # Copy the images to the training folder.
+    # Copy the image to the training folder
 
     masked_list=os.listdir(mask_path)
 
@@ -268,7 +276,7 @@ for label in ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"
         labelme_json = json.load(open(json_path, encoding='utf-8'))
         orgin_image = cv2.imread(img_path)
 
-        shutil.copyfile(img_path, os.path.join(outimg_path ,sample+".png"))
+        # shutil.copyfile(img_path, os.path.join(outimg_path ,sample+".png"))
         
         mask_image = shape_to_mask(orgin_image.shape, labelme_json['shapes'][label_index[label]]['points'], label_shape[label])
         mask_image = cv2.cvtColor(mask_image.astype(np.uint8)*255, cv2.COLOR_GRAY2BGR)
@@ -283,7 +291,7 @@ for label in ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"
     dataset = SegmentationDataset(image_dir=outimg_path, mask_dir=outmask_path, transform=transform)
 
     bs=1
-    # Split the dataset.
+    # Split the dataset
     train_size = int(0.8 * len(dataset))
     val_size = int(0.1 * len(dataset))
     test_size = len(dataset) - train_size - val_size
@@ -302,7 +310,8 @@ for label in ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"
             classes=1,
         )
 
-    # Configure the model hyperparameters.
+    # Configure model hyperparameters
+
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     lr=1e-4
     weight_decay=1e-4
@@ -312,11 +321,11 @@ for label in ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"
     torch.cuda.empty_cache()
 
 
-    # Define the loss function and optimizer.
+    # Define the loss function and the optimizer.
     criterion = dice_loss # dice_loss nn.BCELoss() nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(),lr=lr, weight_decay=weight_decay)
 
-    # Train the model.
+    # Train the models
     model.to(device)
 
     best_val_loss = float('inf')
@@ -339,7 +348,7 @@ for label in ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"
             epoch_loss = running_loss / len(train_dataset)
             print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {epoch_loss:.4f}", flush=True)
 
-            # Evaluate the model on the validation set.
+            # Evaluate the model on the validation set
             model.eval()
             val_loss = 0.0
             # val_aucs = []
@@ -416,16 +425,17 @@ for label in ["head","shoulder_left","shoulder_right","ankle_left","ankle_right"
     print("Done!", flush=True)
 
 
-    # ply to all images for segmentation.
-    if True:
+    # Apply the model to all images for segmentation
+    if False:
 
         model.load_state_dict(torch.load(best_model_name))
         model.to(device)
         model.eval()
 
-        input_path = "/storageC/shiwei/work/DXA/6_pose_predicted_"+bak+"_png/"
+        input_path = "/storageC/shiwei/work/DXA/6_pose_predicted_"+bak+"_png1/"
         input_list = os.listdir(input_path)
 
+        # only .png
         input_list = [file for file in input_list if file.endswith('.png')]
 
         output_path = "/storageC/shiwei/work/DXA/7_segment_predicted_" + \
