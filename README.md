@@ -1,6 +1,6 @@
 # Image Processing and Segmentation Pipeline for head-body-ratio(HBR)
 
-This repository contains a collection of Python scripts for image processing and segmentation, focused on tasks such as background extraction, contrast enhancement, head pose classification, and image segmentation. The project also includes a pipeline script to execute the entire process.
+This repository contains a collection of Python scripts for image processing and segmentation, focused on tasks such as background extraction, contrast classification, head pose classification, and image segmentation. The project also includes a pipeline script to execute the entire process.
 
 ## Files Overview
 
