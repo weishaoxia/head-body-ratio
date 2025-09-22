@@ -1,6 +1,10 @@
+##
+# Distinguish between white and black backgrounds
+
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 import os
 import cv2
-print(cv2.__version__)
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,91 +14,105 @@ import shutil
 import glob
 from tqdm import tqdm
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import defaultdict
+from threading import Lock
 
-import torch
-import torchvision
-import torch.nn as nn
-import torch.optim as optim
-import segmentation_models_pytorch as smp
+# Set random seed for reproducibility
+def copy_file(source_path, target_path):
+    if os.path.exists(source_path):
+        if not os.path.exists(target_path):
+            shutil.copyfile(source_path, target_path)
+    else:
+        print(f"File {os.path.basename(source_path)} not found in {os.path.dirname(source_path)}")
 
-from torch.utils.data import Dataset, DataLoader, TensorDataset
-import torchvision.transforms as transforms
-import torchvision.models as models
-from sklearn.model_selection import train_test_split
-from PIL import Image
-
-def copy_pres(source_dir, target_dir, filenames):
+# Parallel copy for output
+def copy_pres_parallel(source_dir, target_dir, filenames, max_workers=8):
     os.makedirs(target_dir, exist_ok=True)
-    
-    for filename in filenames:
-        source_path = os.path.join(source_dir, filename)
-        target_path = os.path.join(target_dir, filename)
-        if os.path.exists(source_path):
-            if not os.path.exists(target_path):
-                shutil.copyfile(source_path, target_path)
-                # print(f"Copied {filename} to {target_dir}")
-        else:
-            print(f"File {filename} not found in {source_dir}")
 
-# Distinguish between white and black backgrounds
-# Remove oversized images
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for filename in filenames:
+            source_path = os.path.join(source_dir, filename)
+            target_path = os.path.join(target_dir, filename)
+            futures.append(executor.submit(copy_file, source_path, target_path))
 
-bak_white_size = (960, 384)
-bak_black_size = (864, 288)
+        # Use tqdm to show progress bar
+        for _ in tqdm(as_completed(futures), total=len(futures), desc="Copying"):
+            pass
 
-input_path = "/storageC/shiwei/work/DXA/3_crop_predicted_npy/"
-input_list = os.listdir(input_path)
+bak_size = (960, 384)
 
-print(len(input_list))
+input_path = "/home/shiwei/work/DXA"
+input_list = os.listdir(os.path.join(input_path, "3_crop_predicted_npy"))
+
+print(len(input_list), flush=True)
+# Global lock for writing shared lists
+lock = Lock()
 
 bak_black_list = []
-bak_black_os_list = []
 bak_white_list = []
-bak_white_os_list = []
+bak_os_list = [] # oversize
+unexpected_list = []
+less_size_list = []
 
-for filename in tqdm(input_list):
-    file_size = os.path.getsize(os.path.join("/storageC/shiwei/work/DXA/3_crop_predicted_png/", filename.replace('.npy', '.png')))
-    file_size_kb = file_size / 1024 
+# Used for batch background color determination
+def process_file(filename, input_path, bak_size):
+    png_path = os.path.join(input_path, "3_crop_predicted_png", filename.replace('.npy', '.png'))
+    npy_path = os.path.join(input_path, "3_crop_predicted_npy", filename)
 
-    if file_size_kb > 40:
-        data = np.load(os.path.join(input_path, filename))
-        height, width = data.shape[:2]
+    file_size = os.path.getsize(png_path)
+    file_size_kb = file_size / 1024
 
-        arr = data[0:9,0:9]
-        unique_elements, counts = np.unique(arr, return_counts=True)
-        mode_index = np.argmax(counts)
-        bak_col = unique_elements[mode_index]
-        
-        if bak_col == 0:
-            bak = "black"
-            if (height > bak_black_size[0]) | (width > bak_black_size[1]):
-                bak_black_os_list.append(filename)
-            else:
-                bak_black_list.append(filename)
+    # Remove undersized images
+    if file_size_kb < 40:
+        less_size_list.append(filename)
 
-        elif bak_col == 252:
-            bak = "white"
-            if (height > bak_white_size[0]) | (width > bak_white_size[1]):
-                bak_white_os_list.append(filename)
-            else:
-                bak_white_list.append(filename)
+    data = np.load(npy_path)
+    height, width = data.shape[:2]
+
+
+    arr = data[0:9, 0:9] # Top-left pixel block
+    unique_elements, counts = np.unique(arr, return_counts=True)
+    mode_index = np.argmax(counts)
+    bak_col = unique_elements[mode_index]
+
+    with lock:
+        if (height > bak_size[0]) or (width > bak_size[1]):
+            bak_os_list.append(filename)
         else:
-            print(filename, bak_col,flush=True)
+            if bak_col == 0:
+                    bak_black_list.append(filename)
+            elif bak_col == 252:
+                    bak_white_list.append(filename)
+            else:
+                print(f"{filename} → Unexpected background color: {bak_col}", flush=True)
+                unexpected_list.append(filename)
+# Batch processing
+def parallel_process(input_list, input_path, bak_size, max_workers=16):
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(process_file, filename, input_path, bak_size)
+            for filename in input_list
+        ]
+        for _ in tqdm(as_completed(futures), total=len(futures), desc="Processing"):
+            pass
+parallel_process(
+    input_list=input_list,
+    input_path=input_path,
+    bak_size=bak_size,
+    max_workers=24
+)
 
-        # plt.imshow(data, cmap='gray')
-        # plt.show()
-    else:
-        print(filename, bak_col,flush=True)
-          
-print(len(bak_black_list), len(bak_black_os_list),flush=True)
-print(len(bak_white_list), len(bak_white_os_list),flush=True)
 
-# print(pd.Series(bak_black_list).str.split("_").str[0].value_counts().shape,flush=True)
-# print(pd.Series(bak_white_list).str.split("_").str[0].value_counts().shape,flush=True)
+print(len(bak_black_list), len(bak_white_list), flush=True)
+print("Over image size ", len(bak_os_list), flush=True)
+print("Less file size", len(less_size_list), flush=True)
+print("Unexpected background color ", unexpected_list, flush=True)
 
-if True:
-    copy_pres("/storageC/shiwei/work/DXA/3_crop_predicted_npy", "/storageC/shiwei/work/DXA/4_bak_black_npy", bak_black_list)
-    copy_pres("/storageC/shiwei/work/DXA/3_crop_predicted_npy", "/storageC/shiwei/work/DXA/4_bak_white_npy", bak_white_list)
+# output
+copy_pres_parallel("/home/shiwei/work/DXA/3_crop_predicted_npy", "/home/shiwei/work/DXA/4_bak_black_npy", bak_black_list, max_workers=32)
+copy_pres_parallel("/home/shiwei/work/DXA/3_crop_predicted_npy", "/home/shiwei/work/DXA/4_bak_white_npy", bak_white_list, max_workers=32)
 
-    copy_pres("/storageC/shiwei/work/DXA/3_crop_predicted_png", "/storageC/shiwei/work/DXA/4_bak_black_png", [item.replace('.npy', '.png') for item in bak_black_list])
-    copy_pres("/storageC/shiwei/work/DXA/3_crop_predicted_png", "/storageC/shiwei/work/DXA/4_bak_white_png", [item.replace('.npy', '.png') for item in bak_white_list])
+copy_pres_parallel("/home/shiwei/work/DXA/3_crop_predicted_png", "/home/shiwei/work/DXA/4_bak_black_png", [item.replace('.npy', '.png') for item in bak_black_list], max_workers=32)
+copy_pres_parallel("/home/shiwei/work/DXA/3_crop_predicted_png", "/home/shiwei/work/DXA/4_bak_white_png", [item.replace('.npy', '.png') for item in bak_white_list], max_workers=32)

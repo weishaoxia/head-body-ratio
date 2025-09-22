@@ -1,8 +1,13 @@
-# %%
+##
+# Extract images with normal contrast between two background colors
+
+import time
 import os
-import cv2
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 import sys
-# print(cv2.__version__)
+import cv2
+import copy
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,100 +17,55 @@ import shutil
 import glob
 from tqdm import tqdm
 import random
-
 import torch
 import torchvision
 import torch.nn as nn
 import torch.optim as optim
 import segmentation_models_pytorch as smp
-
+import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 import torchvision.transforms as transforms
 import torchvision.models as models
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
-
+import multiprocessing as mp
+from multiprocessing import Pool, cpu_count
 from PIL import Image
-current_dir = os.getcwd() 
 
+# Set random seed for reproducibility
+def set_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
 
-# %%
-# Extract the full-body skeletal image from each sample.
-bak = str(sys.argv[1]) #"black" "white"
+# Copy training files
+def copy_file(source_path, target_path):
+    if os.path.exists(source_path):
+        if not os.path.exists(target_path):
+            shutil.copyfile(source_path, target_path)
+    else:
+        print(f"File {os.path.basename(source_path)} not found in {os.path.dirname(source_path)}")
 
-if bak == "white":
-    label_nrow = 850
-elif bak == "black":
-    label_nrow = 850
-else:
-    label_nrow = 0
-directory = "/storageC/shiwei/work/DXA/4_bak_"+bak+"_npy"
-img_files = glob.glob(os.path.join(directory, '*.npy'))
-
-df = pd.DataFrame(columns=['File_Name'])
-df['File_Name'] = [os.path.splitext(os.path.basename(file))[0] for file in img_files]
-df["Label"] = 0
-
-df["Artificial"] = 0
-df["Amputation"] = 0
-
-df = df.sort_values(by="File_Name")
-# print(df.shape)
-
-label_df_train = pd.read_table("/storageC/shiwei/work/DXA/5_contrast_"+bak+"_label_my.tsv",nrows=label_nrow)
-
-df.loc[df.File_Name.isin(label_df_train.File_Name),"Label"] = label_df_train.loc[label_df_train.File_Name.isin(df.File_Name),"Label"].values
-df.to_csv("/storageC/shiwei/work/DXA/5_contrast_"+bak+"_label.tsv",sep="\t",index=False,header=True)
-
-# %%
-def copy_pres(source_dir, target_dir, filenames):
-    if os.path.exists(target_dir):
-        shutil.rmtree(target_dir)
+# Parallel copy for predictions
+def copy_pres_parallel(source_dir, target_dir, filenames, max_workers=8):
     os.makedirs(target_dir, exist_ok=True)
-    
-    for filename in filenames:
-        source_path = os.path.join(source_dir, filename)
-        target_path = os.path.join(target_dir, filename)
-        if os.path.exists(source_path):
-            if not os.path.exists(target_path):
-                shutil.copyfile(source_path, target_path)
-                # print(f"Copied {filename} to {target_dir}")
-        else:
-            print(f"File {filename} not found in {source_dir}")
 
-# %%
-def copy_npys(source_dir, target_dir, filenames):
-    if os.path.exists(target_dir):
-        shutil.rmtree(target_dir)
-    os.makedirs(target_dir, exist_ok=True)
-    
-    for filename in filenames:
-        source_path = os.path.join(source_dir, filename)
-        target_path = os.path.join(target_dir, filename)
-        if os.path.exists(source_path):
-            if filename.endswith('.npy'):
-                if not os.path.exists(target_path):
-                    shutil.copyfile(source_path, target_path)
-                # print(f"Copied {filename} to {target_dir}")
-            else:
-                print(f"Ignored {filename}: not a .npy file")
-        else:
-            print(f"File {filename} not found in {source_dir}")
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for filename in filenames:
+            source_path = os.path.join(source_dir, filename)
+            target_path = os.path.join(target_dir, filename)
+            futures.append(executor.submit(copy_file, source_path, target_path))
 
-# %%
-# Extract the labeled images and copy them to the training dataset.
-label_df_train = pd.read_table("/storageC/shiwei/work/DXA/5_contrast_"+bak+"_label_my.tsv",nrows=label_nrow)
-label_df_train["File_Name_npy"] = label_df_train.File_Name + ".npy"
-df_label_1 = label_df_train[label_df_train['Label'] == 1]
-num_label_1 = df_label_1.shape[0]
-df_remaining = label_df_train[label_df_train['Label'] != 1]
-df_random_sample = df_remaining.sample(n=num_label_1, random_state=123)
-label_df_train = pd.concat([df_label_1, df_random_sample])
+        # Use tqdm to show progress bar
+        for _ in tqdm(as_completed(futures), total=len(futures), desc="Copying"):
+            pass
 
-copy_npys("/storageC/shiwei/work/DXA/4_bak_"+bak+"_npy", "/storageC/shiwei/work/DXA/5_contrast_"+bak+"_trains", label_df_train.File_Name_npy.to_list())
-print(label_df_train.Label.value_counts(),flush=True)
-
-# %%
+# Build dataset class
 class NpyDataset(Dataset):
     def __init__(self, dataframe, data_dir, transform=None, target_size=(960, 384)):
         self.dataframe = dataframe
@@ -117,15 +77,16 @@ class NpyDataset(Dataset):
         return len(self.dataframe)
 
     def __getitem__(self, idx):
-        filename = self.dataframe.iloc[idx, -1]
-        label = self.dataframe.iloc[idx, 1]
+        fileprefix = self.dataframe.iloc[idx, 0] # first column is image ID
+        label = self.dataframe.iloc[idx, 1]     # second column is label
+        filename = self.dataframe.iloc[idx, 2]  # third column is filename
         # print(f"Filename: {filename}, Label: {label}")
         data = np.load(os.path.join(self.data_dir, filename))
 
         height, width = data.shape[:2]
 
         if (height > self.target_size[0]) & (width > self.target_size[1]):
-            print(filename)
+            # print("BothOversize:"+filename, flush=True)
             crop_height = max(0, height - self.target_size[0])
             crop_top = crop_height // 2
             crop_bottom = height - (crop_height - crop_top)
@@ -134,13 +95,14 @@ class NpyDataset(Dataset):
             crop_left = crop_width // 2
             crop_right = width - (crop_width - crop_left)
     
-            # Crop the image from the center.
+            # Center crop the image
             cropped_image = data[crop_top:crop_bottom, crop_left:crop_right]
             if self.transform:
                 transform_image = self.transform(cropped_image)
 
         elif (height > self.target_size[0]) & (width <= self.target_size[1]):
-            print(filename)
+            # print("HeightOversize:"+filename, flush=True)
+
             crop_height = max(0, height - self.target_size[0])
             crop_top = crop_height // 2
             crop_bottom = height - (crop_height - crop_top)
@@ -158,7 +120,8 @@ class NpyDataset(Dataset):
                 transform_image = self.transform(padded_image)
     
         elif (height <= self.target_size[0]) & (width > self.target_size[1]):
-            print(filename)
+            # print("WidthOversize:"+filename, flush=True)
+
             crop_width = max(0, width - self.target_size[1])
             crop_left = crop_width // 2
             crop_right = width - (crop_width - crop_left)
@@ -174,7 +137,7 @@ class NpyDataset(Dataset):
 
             if self.transform:
                 transform_image = self.transform(padded_image)
-
+        # Pad the image
         else:
             pad_height = max(0, self.target_size[0] - height)
             pad_top = pad_height // 2
@@ -192,19 +155,21 @@ class NpyDataset(Dataset):
             if self.transform:
                 transform_image = self.transform(padded_image)
         
-        return transform_image, label
+        return transform_image, label, fileprefix
     
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5], std=[0.5])
-])
+# Define transforms
+def get_transform():
+    return transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5])
+    ])
 
-# %%
+# Aggregates per-sample tensors and labels
 def myDataset(dataset):
     train_data = []
     train_labels = []
 
-    for data, label in dataset:
+    for data, label, filenames in dataset:
         train_data.append(data)
         train_labels.append(label)
         
@@ -212,161 +177,255 @@ def myDataset(dataset):
     train_labels = torch.tensor(train_labels)
     return TensorDataset(train_data, train_labels)
 
-# %%
-train_df, test_df = train_test_split(label_df_train, test_size=0.2, random_state=123)
-val_df, test_df = train_test_split(test_df, test_size=0.5, random_state=123)
+# Predict images in batches
+def process_part_pool(args):
+    os.environ["OMP_NUM_THREADS"] = "16"
+    os.environ["MKL_NUM_THREADS"] = "16"
+    torch.set_num_threads(16)
 
-data_dir = "/storageC/shiwei/work/DXA/5_contrast_"+bak+"_trains"
-train_dataset = NpyDataset(train_df, data_dir, transform=transform)
-val_dataset = NpyDataset(val_df, data_dir, transform=transform)
-test_dataset = NpyDataset(test_df, data_dir, transform=transform)
+    part_df, part_idx, transform, raw_path, save_dir, bak = args
 
-batch_size = 4
-train_loader = DataLoader(myDataset(train_dataset), batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(myDataset(val_dataset), batch_size=batch_size, shuffle=False)
-test_loader = DataLoader(myDataset(test_dataset), batch_size=batch_size, shuffle=False)
+    # Load model (each process loads independently)）
+    device = torch.device("cuda:0")
 
-# %%
-# Build a ResNet model.
-torch.cuda.empty_cache()
-model_path="/storageC/shiwei/work/DXA/5_contrast_"+bak+"_models/"
-if not os.path.exists(model_path):
-    os.makedirs(model_path)
+    # Build model (grayscale input + binary classification)
+    model = models.resnet152(weights='ResNet152_Weights.DEFAULT')
+    model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+    model.fc = nn.Linear(model.fc.in_features, 2)
 
-model = models.resnet152(weights='ResNet152_Weights.DEFAULT')
-model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-model.fc = nn.Linear(model.fc.in_features, 2)
-
-# Define the loss function and optimizer.
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.00001)
-
-# Train the model.
-num_epochs = 20
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-
-best_val_loss = float('inf')
-
-for epoch in range(num_epochs):
-    model.train()
-    running_loss = 0.0
-    for inputs, labels in train_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item() * inputs.size(0)
-    
-    epoch_loss = running_loss / len(train_dataset)
-    print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {epoch_loss:.4f}", flush=True)
-
-    # Evaluate the model on the validation set.
+    # Load weights
+    model.load_state_dict(torch.load("/home/shiwei/work/DXA/5_contrast_"+bak+"_models/best_model_resnet152.pth", map_location=device))
+    model.to(device)
     model.eval()
-    val_loss = 0.0
-    predictions = []
-    true_labels = []
+
+    dataset = NpyDataset(part_df, raw_path, transform=transform)
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=False)
+
+    results = []
 
     with torch.no_grad():
-        for inputs, labels in val_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
+        for inputs, labels, filenames in dataloader:
+            inputs = inputs.to(device)
             outputs = model(inputs)
-            
+            _, predicted = torch.max(outputs, 1)
+
+            for fname, pred in zip(filenames, predicted.cpu().numpy()):
+                results.append((fname, pred))
+
+    # Each subprocess saves its own prediction results
+    part_output_path = os.path.join(save_dir, f"preds_part_{part_idx}.npy")
+    np.save(part_output_path, results)
+
+    return part_output_path  # convenient for the main process to record
+
+# Apply the model to all images for prediction
+def predict_all_data():
+    raw_path = "/home/shiwei/work/DXA/4_bak_"+bak+"_npy"
+    # Get list of all .npy files in the directory
+    npy_files = glob.glob(os.path.join(raw_path, '*.npy'))
+    # Create an initial dataframe to hold file names and labels
+    label_df_all = pd.DataFrame(columns=['File_Name'])
+    label_df_all['File_Name'] = [os.path.splitext(os.path.basename(file))[0] for file in npy_files]
+    label_df_all["Label"] = 0
+    label_df_all["File_Name_npy"] = label_df_all.File_Name + ".npy"
+    
+
+    num_parts = 1000
+    label_df_all_parts = np.array_split(label_df_all, num_parts)
+
+    save_dir = "/home/shiwei/work/DXA/5_contrast_"+bak+"_parts"
+    os.makedirs(save_dir, exist_ok=True)
+
+    args_list = [
+        (part_df, i, get_transform(), raw_path, save_dir, bak)
+        for i, part_df in enumerate(label_df_all_parts)
+    ]
+
+    with Pool(processes=8) as pool:
+        output_files = list(tqdm(pool.imap_unordered(process_part_pool, args_list), total=len(args_list)))
+
+    all_results = []
+    for file in sorted(output_files):
+        results = np.load(file, allow_pickle=True)
+        all_results.extend(results)
+    np.save("/home/shiwei/work/DXA/5_contrast_"+bak+"_pred.npy", all_results)
+    shutil.rmtree(save_dir)
+
+# Extract skeletal images classified as 0 (normal contrast)
+def filter_and_copy_predicted():
+    # Get list of all .npy files in the directory
+    npy_files = glob.glob(os.path.join("/home/shiwei/work/DXA/4_bak_"+bak+"_npy", '*.npy'))
+    # Create an initial dataframe to hold file names and labels
+    label_df_all = pd.DataFrame(columns=['File_Name'])
+    label_df_all['File_Name'] = [os.path.splitext(os.path.basename(file))[0] for file in npy_files]
+
+    crop_pred = np.load("/home/shiwei/work/DXA/5_contrast_"+bak+"_pred.npy")
+    print(len(crop_pred), flush=True)
+    if len(label_df_all) != len(crop_pred):
+        raise ValueError(f"Length mismatch: label_df_all ({len(label_df_all)}) vs crop_pred ({len(crop_pred)})")
+        
+    label_df_all = label_df_all.merge(pd.DataFrame(crop_pred, columns=["File_Name", "predict"]), on="File_Name", how="left")
+    label_df_all["predict"] = label_df_all["predict"].astype(int)
+
+    label_df_pre = label_df_all.loc[label_df_all.predict == 0].copy().reset_index(drop=True)
+    label_df_pre["File_Name_npy"] = label_df_pre.File_Name + ".npy"
+    label_df_pre["File_Name_png"] = label_df_pre.File_Name + ".png"
+    print(len(label_df_pre), flush=True)
+
+    copy_pres_parallel("/home/shiwei/work/DXA/4_bak_"+bak+"_npy", "/home/shiwei/work/DXA/5_contrast_"+bak+"_predicted_npy", label_df_pre.File_Name_npy.to_list(), max_workers=32)
+    copy_pres_parallel("/home/shiwei/work/DXA/4_bak_"+bak+"_png", "/home/shiwei/work/DXA/5_contrast_"+bak+"_predicted_png", label_df_pre.File_Name_png.to_list(), max_workers=32)
+
+# Model building, training, validation and testing
+def train_model():
+    set_seed(seed)
+
+    # Read manually annotated labels for constructing total-body images
+    label_df_train = pd.read_table("/home/shiwei/work/DXA/5_contrast_"+bak+"_label.tsv")
+    train_path = "/home/shiwei/work/DXA/5_contrast_"+bak+"_trains"
+    transform = get_transform()
+    batch_size = 4
+
+    # Split dataset into training, validation and test sets
+    train_df, test_df = train_test_split(label_df_train, stratify=label_df_train['Label'], test_size=0.2, random_state=seed)
+    val_df, test_df = train_test_split(test_df, stratify=test_df['Label'], test_size=0.5, random_state=seed)
+
+    train_dataset = NpyDataset(train_df, train_path, transform=transform)
+    val_dataset = NpyDataset(val_df, train_path, transform=transform)
+    test_dataset = NpyDataset(test_df, train_path, transform=transform)
+
+    train_loader = DataLoader(myDataset(train_dataset), batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(myDataset(val_dataset), batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(myDataset(test_dataset), batch_size=batch_size, shuffle=False)
+
+    
+    # Build ResNet model
+    torch.cuda.empty_cache()
+    model_path="/home/shiwei/work/DXA/5_contrast_"+bak+"_models/"
+    if not os.path.exists(model_path):
+        os.makedirs(model_path)
+
+    model = models.resnet152(weights='ResNet152_Weights.DEFAULT')
+    model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False) # grayscale
+    model.fc = nn.Linear(model.fc.in_features, 2)  # binary classification
+
+    # Define loss function and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.00001)
+
+    # Train model
+    num_epochs = 30
+    device = torch.device("cuda:0")
+    model.to(device)
+
+    best_model_state = None
+    best_val_loss = float('inf')
+
+    for epoch in range(num_epochs):
+        model.train()
+        running_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(inputs)
             loss = criterion(outputs, labels)
-            val_loss += loss.item() * inputs.size(0)
-            
-            probas = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
-            predictions.extend(probas)
-            true_labels.extend(labels.cpu().numpy())
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item() * inputs.size(0)
+        
+        epoch_loss = running_loss / len(train_dataset)
+        print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {epoch_loss:.4f}", flush=True)
+
+        # Evaluate on validation set
+        model.eval()
+        val_loss = 0.0
+        correct = 0
+        total = 0
+        predictions = []
+        true_labels = []
+
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs)
+                
+                loss = criterion(outputs, labels)
+                val_loss += loss.item() * inputs.size(0)
+
+                _, predicted = torch.max(outputs, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+                probas = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
+                predictions.extend(probas)
+                true_labels.extend(labels.cpu().numpy())
+        
+        val_loss /= len(val_dataset)
+        print(f"Validation Loss: {val_loss:.4f}", flush=True)
+        # val_accuracy = correct / total
+        # print(f"Validation Accuracy: {val_accuracy:.4f}")
+        val_auc = roc_auc_score(true_labels, predictions)
+        print(f"Validation AUC: {val_auc:.4f}", flush=True)
+
+        if (val_loss < best_val_loss): #  & (epoch_loss < 0.01)
+            best_val_loss = val_loss
+            best_model_state = copy.deepcopy(model.state_dict())
+    torch.save(best_model_state, model_path+'/best_model_resnet152.pth')
+
     
-    val_loss /= len(val_dataset)
-    print(f"Validation Loss: {val_loss:.4f}", flush=True)
+    # Evaluate best model on test set
+    model.load_state_dict(best_model_state)
+    model.eval()
 
-    val_auc = roc_auc_score(true_labels, predictions)
-    print(f"Validation AUC: {val_auc:.4f}", flush=True)
-
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        best_model = model.state_dict()
-
-torch.save(best_model, model_path+'best_model_resnet152.pth')
-
-
-# %%
-# Evaluate the best model on the test set.
-model.load_state_dict(torch.load(model_path+'/best_model_resnet152.pth'))
-model.eval()
-
-true_labels = []
-predictions = []
-
-with torch.no_grad():
-    for inputs, labels in test_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
-        
-        outputs = model(inputs)
-        
-        probas = torch.softmax(outputs, dim=1)[:, 1]
-        
-        predictions.extend(probas.cpu().numpy())
-        true_labels.extend(labels.cpu().numpy())
-
-auc_score = roc_auc_score(true_labels, predictions)
-print(f"Test AUC: {auc_score:.4f}", flush=True)
-    
-
-# %%
-# Apply to all images to predict the classification.
-
-model.load_state_dict(torch.load(model_path+'/best_model_resnet152.pth'))
-model.eval()
-predicted_labels = np.array([])
-
-label_df_all = pd.read_table("/storageC/shiwei/work/DXA/5_contrast_"+bak+"_label_my.tsv")
-# label_df_all["predict"] = 0
-label_df_all["File_Name_npy"] = label_df_all.File_Name + ".npy"
-print(label_df_all.shape, flush=True)
-data_dir = "/storageC/shiwei/work/DXA/4_bak_"+bak+"_npy"
-
-num_parts = 1000
-label_df_all_parts = np.array_split(label_df_all, num_parts)
-
-for i, part in enumerate(label_df_all_parts):
-    if i % 50 ==0 :
-        print(f"Processing Part {i + 1}:", flush=True)
-        # print(part.shape)
-
-    pred_dataset = NpyDataset(part, data_dir, transform=transform)
-    pred_loader = DataLoader(myDataset(pred_dataset), batch_size=batch_size, shuffle=False)
+    true_labels = []
+    predictions = []
+    correct = 0
+    total = 0
+    test_loss = 0.0
 
     with torch.no_grad():
-        for inputs, labels in pred_loader:
+        for inputs, labels in test_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
             _, predicted = torch.max(outputs, 1)
-            predicted_labels = np.append(predicted_labels, predicted.cpu().numpy())
-    np.save("/storageC/shiwei/work/DXA/5_contrast_"+bak+"_pred.npy", predicted_labels)
+            loss = criterion(outputs, labels)
+            test_loss += loss.item() * inputs.size(0)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
 
-# %%
-# Extract the images classified as having a contrast of 0.
+            probas = torch.softmax(outputs, dim=1)[:, 1]
+            
+            # Save predicted probabilities and true labels
+            predictions.extend(probas.cpu().numpy())
+            true_labels.extend(labels.cpu().numpy())
+            
+    auc_score = roc_auc_score(true_labels, predictions)
+    print(f"Test AUC: {auc_score:.4f}", flush=True)
+    test_loss /= len(test_dataset)
+    print(f"Test Loss: {test_loss:.4f}", flush=True)
 
-label_df_all = pd.read_table("/storageC/shiwei/work/DXA/5_contrast_"+bak+"_label_my.tsv")
-print(len(label_df_all), flush=True)
-class_pred = np.load("/storageC/shiwei/work/DXA/5_contrast_"+bak+"_pred.npy")
-print(len(class_pred), flush=True)
+    torch.cuda.empty_cache()
 
-label_df_all = label_df_all.iloc[0:len(class_pred)]
-label_df_all["predict"] = class_pred #[0:len(label_df_all)]
-label_df_all["predict"] = label_df_all["predict"].astype(int)
-# (label_df_all.Crop == label_df_all.predict).value_counts()
 
-# Images with normal contrast.
-label_df_pre = label_df_all.loc[label_df_all.predict == 0].copy().reset_index(drop=True)
-label_df_pre["File_Name_npy"] = label_df_pre.File_Name + ".npy"
-label_df_pre["File_Name_png"] = label_df_pre.File_Name + ".png"
-print(len(label_df_pre), flush=True)
+def main():
+    os.environ["OMP_NUM_THREADS"] = "32"
+    os.environ["MKL_NUM_THREADS"] = "32"
+    torch.set_num_threads(32)
 
-copy_pres("/storageC/shiwei/work/DXA/4_bak_"+bak+"_npy", "/storageC/shiwei/work/DXA/5_contrast_"+bak+"_predicted_npy", label_df_pre.File_Name_npy.to_list())
-copy_pres("/storageC/shiwei/work/DXA/4_bak_"+bak+"_png", "/storageC/shiwei/work/DXA/5_contrast_"+bak+"_predicted_png", label_df_pre.File_Name_png.to_list())
+    # Train model and test
+    train_model()
+
+    # Apply model to all images for prediction
+    predict_all_data()
+
+    # Extract skeletal images classified as 0 (normal contrast)
+    filter_and_copy_predicted()
+
+    print("Done.")
+
+if __name__ == '__main__':
+    mp.set_start_method('spawn', force=True)
+
+    bak = str(sys.argv[1])
+    seed = 42
+    set_seed(seed)
+    main()
