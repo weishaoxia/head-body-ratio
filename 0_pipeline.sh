@@ -22,7 +22,7 @@ nohup python 3_crop_class.py > 3_crop_class.py.log &
 nohup python 4_background_class.py > 4_background_class.py.log &
 
 # --- Step 5: Contrast Classification ---
-# Removal of DXA images with abnormal contrast..
+# Removal of DXA images with abnormal contrast.
 #############################################################################
 nohup python 5_contrast_class.py white > 5_contrast_class.py_white.log &
 nohup python 5_contrast_class.py black > 5_contrast_class.py_black.log &
@@ -42,7 +42,7 @@ mkdir 7_segment_masked_white_direct
 mkdir 7_segment_masked_black_direct
 
 # --- Step 7: Image Segmentation ---
-# Image segmentation model to identify head and anatomical landmarks..
+# Image segmentation model to identify head and anatomical landmarks.
 #############################################################################
 # Define the list of body parts to be segmented
 label_list=("head" "shoulder_left" "shoulder_right" "ankle_left" "ankle_right" "hip_left" "hip_right")
