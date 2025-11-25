@@ -43,7 +43,7 @@ def copy_pres_parallel(source_dir, target_dir, filenames, max_workers=8):
 
 bak_size = (960, 384)
 
-input_path = "/home/shiwei/work/DXA"
+input_path = "/home/xx/work/DXA"
 input_list = os.listdir(os.path.join(input_path, "3_crop_predicted_npy"))
 
 print(len(input_list), flush=True)
@@ -111,8 +111,8 @@ print("Less file size", len(less_size_list), flush=True)
 print("Unexpected background color ", unexpected_list, flush=True)
 
 # output
-copy_pres_parallel("/home/shiwei/work/DXA/3_crop_predicted_npy", "/home/shiwei/work/DXA/4_bak_black_npy", bak_black_list, max_workers=32)
-copy_pres_parallel("/home/shiwei/work/DXA/3_crop_predicted_npy", "/home/shiwei/work/DXA/4_bak_white_npy", bak_white_list, max_workers=32)
+copy_pres_parallel("/home/xx/work/DXA/3_crop_predicted_npy", "/home/xx/work/DXA/4_bak_black_npy", bak_black_list, max_workers=32)
+copy_pres_parallel("/home/xx/work/DXA/3_crop_predicted_npy", "/home/xx/work/DXA/4_bak_white_npy", bak_white_list, max_workers=32)
 
-copy_pres_parallel("/home/shiwei/work/DXA/3_crop_predicted_png", "/home/shiwei/work/DXA/4_bak_black_png", [item.replace('.npy', '.png') for item in bak_black_list], max_workers=32)
-copy_pres_parallel("/home/shiwei/work/DXA/3_crop_predicted_png", "/home/shiwei/work/DXA/4_bak_white_png", [item.replace('.npy', '.png') for item in bak_white_list], max_workers=32)
+copy_pres_parallel("/home/xx/work/DXA/3_crop_predicted_png", "/home/xx/work/DXA/4_bak_black_png", [item.replace('.npy', '.png') for item in bak_black_list], max_workers=32)
+copy_pres_parallel("/home/xx/work/DXA/3_crop_predicted_png", "/home/xx/work/DXA/4_bak_white_png", [item.replace('.npy', '.png') for item in bak_white_list], max_workers=32)
