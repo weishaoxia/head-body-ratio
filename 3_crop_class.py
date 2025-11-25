@@ -187,7 +187,7 @@ def process_part_pool(args):
     model.fc = nn.Linear(model.fc.in_features, 2)
 
     # Load weights
-    model.load_state_dict(torch.load('/storageC/shiwei/work/DXA/3_crop_models/best_model_resnet152.pth', map_location=device))
+    model.load_state_dict(torch.load('/storageC/xx/work/DXA/3_crop_models/best_model_resnet152.pth', map_location=device))
     model.to(device)
     model.eval()
 
@@ -215,8 +215,8 @@ def process_part_pool(args):
 def train_model():
     set_seed(seed)
     # Read manually annotated labels for constructing complete total-body images
-    label_df_train = pd.read_table("/storageC/shiwei/work/DXA/3_crop_label.tsv")
-    train_path = "/storageC/shiwei/work/DXA/3_crop_trains"
+    label_df_train = pd.read_table("/storageC/xx/work/DXA/3_crop_label.tsv")
+    train_path = "/storageC/xx/work/DXA/3_crop_trains"
     transform = get_transform()
     batch_size = 8
 
@@ -235,7 +235,7 @@ def train_model():
     
     # Build ResNet model
     torch.cuda.empty_cache()
-    model_path='/storageC/shiwei/work/DXA/3_crop_models/'
+    model_path='/storageC/xx/work/DXA/3_crop_models/'
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
@@ -344,18 +344,18 @@ def train_model():
 # Apply the model to all images for prediction
 def predict_all_data():
     # Get list of all .npy files in the directory
-    npy_files = glob.glob(os.path.join('/storageC/shiwei/work/DXA/2_class_predicted_npy', '*.npy'))
+    npy_files = glob.glob(os.path.join('/storageC/xx/work/DXA/2_class_predicted_npy', '*.npy'))
     # Create an initial dataframe to hold file names and labels
     label_df_all = pd.DataFrame(columns=['File_Name'])
     label_df_all['File_Name'] = [os.path.splitext(os.path.basename(file))[0] for file in npy_files]
     label_df_all["Label"] = 0
     label_df_all["File_Name_npy"] = label_df_all.File_Name + ".npy"
-    raw_path = "/storageC/shiwei/work/DXA/2_class_predicted_npy"
+    raw_path = "/storageC/xx/work/DXA/2_class_predicted_npy"
 
     num_parts = 1000
     label_df_all_parts = np.array_split(label_df_all, num_parts)
 
-    save_dir = "/storageC/shiwei/work/DXA/3_crop_pred_parts"
+    save_dir = "/storageC/xx/work/DXA/3_crop_pred_parts"
     os.makedirs(save_dir, exist_ok=True)
 
     args_list = [
@@ -370,17 +370,17 @@ def predict_all_data():
     for file in sorted(output_files):
         results = np.load(file, allow_pickle=True)
         all_results.extend(results)
-    np.save("/storageC/shiwei/work/DXA/3_crop_pred.npy", all_results)
+    np.save("/storageC/xx/work/DXA/3_crop_pred.npy", all_results)
 
 # Extract complete total-body images classified as 0
 def filter_and_copy_predicted():
     # Get list of all .npy files in the directory
-    npy_files = glob.glob(os.path.join('/storageC/shiwei/work/DXA/2_class_predicted_npy', '*.npy'))
+    npy_files = glob.glob(os.path.join('/storageC/xx/work/DXA/2_class_predicted_npy', '*.npy'))
     # Create an initial dataframe to hold file names and labels
     label_df_all = pd.DataFrame(columns=['File_Name'])
     label_df_all['File_Name'] = [os.path.splitext(os.path.basename(file))[0] for file in npy_files]
 
-    crop_pred = np.load("/storageC/shiwei/work/DXA/3_crop_pred.npy")
+    crop_pred = np.load("/storageC/xx/work/DXA/3_crop_pred.npy")
     print(len(crop_pred), flush=True)
     if len(label_df_all) != len(crop_pred):
         raise ValueError(f"Length mismatch: label_df_all ({len(label_df_all)}) vs crop_pred ({len(crop_pred)})")
@@ -393,8 +393,8 @@ def filter_and_copy_predicted():
     label_df_pre["File_Name_png"] = label_df_pre.File_Name + ".png"
     print(len(label_df_pre), flush=True)
 
-    copy_pres_parallel("/storageC/shiwei/work/DXA/2_class_predicted_npy", "/storageC/shiwei/work/DXA/3_crop_predicted_npy", label_df_pre.File_Name_npy.to_list(), max_workers=32)
-    copy_pres_parallel("/storageC/shiwei/work/DXA/2_class_predicted_png", "/storageC/shiwei/work/DXA/3_crop_predicted_png", label_df_pre.File_Name_png.to_list(), max_workers=32)
+    copy_pres_parallel("/storageC/xx/work/DXA/2_class_predicted_npy", "/storageC/xx/work/DXA/3_crop_predicted_npy", label_df_pre.File_Name_npy.to_list(), max_workers=32)
+    copy_pres_parallel("/storageC/xx/work/DXA/2_class_predicted_png", "/storageC/xx/work/DXA/3_crop_predicted_png", label_df_pre.File_Name_png.to_list(), max_workers=32)
 
 def main():
     # Train model and test
