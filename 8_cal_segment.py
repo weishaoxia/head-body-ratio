@@ -16,11 +16,11 @@ bak = str(sys.argv[1]) # black white
 threshood = 0
 pose = "direct"
 
-os.makedirs("/home/shiwei/work/DXA/8_segment_result", exist_ok=True)
-table_path = f"/home/shiwei/work/DXA/8_segment_result/segment_table_{bak}.tsv"
+os.makedirs("/home/xx/work/DXA/8_segment_result", exist_ok=True)
+table_path = f"/home/xx/work/DXA/8_segment_result/segment_table_{bak}.tsv"
 # Load existing results table if available, otherwise load base DICOM table
 if not os.path.exists(table_path):
-    dcm_table = pd.read_table("/home/shiwei/work/DXA/dcm_table.tsv", sep="\t")
+    dcm_table = pd.read_table("/home/xx/work/DXA/dcm_table.tsv", sep="\t")
 else:
     dcm_table = pd.read_table(table_path, sep="\t")
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     for label in label_list:
         print(f"Processing label: {label}")
 
-        input_path = f"/home/shiwei/work/DXA/7_segment_predicted_{label}_{bak}/"
+        input_path = f"/home/xx/work/DXA/7_segment_predicted_{label}_{bak}/"
         input_list = os.listdir(input_path)
 
         args_list = [(label, input_path, fname, threshood) for fname in input_list]
