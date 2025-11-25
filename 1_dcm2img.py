@@ -11,18 +11,18 @@ from tqdm import tqdm
 
 # Construct output dataframe
 dcm_table = pd.DataFrame(columns=["folder","ID","Sex","Age","height","Weight","Ethnic","DeviceSoftware","Image"])
-# Original UKB DXA data folder, each sample is a zip file, total 76320 files
-DXA_data_folder = "/home/shiwei/work/DXA/0_DXA_data"
+# Original DXA data folder, each sample is a zip file, total 76320 files
+DXA_data_folder = "/home/xx/work/DXA/0_DXA_data"
 # Each sample is unzipped into a subdirectory; each sample may contain multiple images
-DXA_data_unzip = "/home/shiwei/work/DXA/0_DXA_data_unzip"
+DXA_data_unzip = "/home/xx/work/DXA/0_DXA_data_unzip"
 DXA_data_folder_list = [file for file in os.listdir(DXA_data_folder) if file.endswith(".zip")]
 
 # Output .npy directory
-out_path_npy = "/home/shiwei/work/DXA/1_Total_Body_npy"
+out_path_npy = "/home/xx/work/DXA/1_Total_Body_npy"
 if not os.path.exists(out_path_npy):
     os.makedirs(out_path_npy)
 # Output .png directory
-out_path_png = "/home/shiwei/work/DXA/1_Total_Body_png"
+out_path_png = "/home/xx/work/DXA/1_Total_Body_png"
 if not os.path.exists(out_path_png):
     os.makedirs(out_path_png)
 # Image counter
@@ -85,5 +85,5 @@ for folder_path in DXA_data_folder_list:
 
 # Save statistics table for the .dcm images
 dcm_table = dcm_table.sort_values(by="Image", ascending =True)
-dcm_table.to_csv("/home/shiwei/work/DXA/dcm_table.tsv",index=False,header=True,sep="\t")
+dcm_table.to_csv("/home/xx/work/DXA/dcm_table.tsv",index=False,header=True,sep="\t")
 print("num of all images "+str(all_images), flush=True)
