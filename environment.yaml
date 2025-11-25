@@ -240,4 +240,4 @@ dependencies:
       - triton==2.1.0
       - urllib3==1.26.18
       - yacs==0.1.8
-prefix: /home/shiwei/tools/anaconda3/envs/pyg_env
+prefix: /home/xx/tools/anaconda3/envs/pyg_env
