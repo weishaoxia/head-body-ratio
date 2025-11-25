@@ -194,7 +194,7 @@ def process_part_pool(args):
     model.fc = nn.Linear(model.fc.in_features, 2)
 
     # Load weights
-    model.load_state_dict(torch.load("/home/shiwei/work/DXA/5_contrast_"+bak+"_models/best_model_resnet152.pth", map_location=device))
+    model.load_state_dict(torch.load("/home/xx/work/DXA/5_contrast_"+bak+"_models/best_model_resnet152.pth", map_location=device))
     model.to(device)
     model.eval()
 
@@ -220,7 +220,7 @@ def process_part_pool(args):
 
 # Apply the model to all images for prediction
 def predict_all_data():
-    raw_path = "/home/shiwei/work/DXA/4_bak_"+bak+"_npy"
+    raw_path = "/home/xx/work/DXA/4_bak_"+bak+"_npy"
     # Get list of all .npy files in the directory
     npy_files = glob.glob(os.path.join(raw_path, '*.npy'))
     # Create an initial dataframe to hold file names and labels
@@ -233,7 +233,7 @@ def predict_all_data():
     num_parts = 1000
     label_df_all_parts = np.array_split(label_df_all, num_parts)
 
-    save_dir = "/home/shiwei/work/DXA/5_contrast_"+bak+"_parts"
+    save_dir = "/home/xx/work/DXA/5_contrast_"+bak+"_parts"
     os.makedirs(save_dir, exist_ok=True)
 
     args_list = [
@@ -248,18 +248,18 @@ def predict_all_data():
     for file in sorted(output_files):
         results = np.load(file, allow_pickle=True)
         all_results.extend(results)
-    np.save("/home/shiwei/work/DXA/5_contrast_"+bak+"_pred.npy", all_results)
+    np.save("/home/xx/work/DXA/5_contrast_"+bak+"_pred.npy", all_results)
     shutil.rmtree(save_dir)
 
 # Extract skeletal images classified as 0 (normal contrast)
 def filter_and_copy_predicted():
     # Get list of all .npy files in the directory
-    npy_files = glob.glob(os.path.join("/home/shiwei/work/DXA/4_bak_"+bak+"_npy", '*.npy'))
+    npy_files = glob.glob(os.path.join("/home/xx/work/DXA/4_bak_"+bak+"_npy", '*.npy'))
     # Create an initial dataframe to hold file names and labels
     label_df_all = pd.DataFrame(columns=['File_Name'])
     label_df_all['File_Name'] = [os.path.splitext(os.path.basename(file))[0] for file in npy_files]
 
-    crop_pred = np.load("/home/shiwei/work/DXA/5_contrast_"+bak+"_pred.npy")
+    crop_pred = np.load("/home/xx/work/DXA/5_contrast_"+bak+"_pred.npy")
     print(len(crop_pred), flush=True)
     if len(label_df_all) != len(crop_pred):
         raise ValueError(f"Length mismatch: label_df_all ({len(label_df_all)}) vs crop_pred ({len(crop_pred)})")
@@ -272,16 +272,16 @@ def filter_and_copy_predicted():
     label_df_pre["File_Name_png"] = label_df_pre.File_Name + ".png"
     print(len(label_df_pre), flush=True)
 
-    copy_pres_parallel("/home/shiwei/work/DXA/4_bak_"+bak+"_npy", "/home/shiwei/work/DXA/5_contrast_"+bak+"_predicted_npy", label_df_pre.File_Name_npy.to_list(), max_workers=32)
-    copy_pres_parallel("/home/shiwei/work/DXA/4_bak_"+bak+"_png", "/home/shiwei/work/DXA/5_contrast_"+bak+"_predicted_png", label_df_pre.File_Name_png.to_list(), max_workers=32)
+    copy_pres_parallel("/home/xx/work/DXA/4_bak_"+bak+"_npy", "/home/xx/work/DXA/5_contrast_"+bak+"_predicted_npy", label_df_pre.File_Name_npy.to_list(), max_workers=32)
+    copy_pres_parallel("/home/xx/work/DXA/4_bak_"+bak+"_png", "/home/xx/work/DXA/5_contrast_"+bak+"_predicted_png", label_df_pre.File_Name_png.to_list(), max_workers=32)
 
 # Model building, training, validation and testing
 def train_model():
     set_seed(seed)
 
     # Read manually annotated labels for constructing total-body images
-    label_df_train = pd.read_table("/home/shiwei/work/DXA/5_contrast_"+bak+"_label.tsv")
-    train_path = "/home/shiwei/work/DXA/5_contrast_"+bak+"_trains"
+    label_df_train = pd.read_table("/home/xx/work/DXA/5_contrast_"+bak+"_label.tsv")
+    train_path = "/home/xx/work/DXA/5_contrast_"+bak+"_trains"
     transform = get_transform()
     batch_size = 4
 
@@ -300,7 +300,7 @@ def train_model():
     
     # Build ResNet model
     torch.cuda.empty_cache()
-    model_path="/home/shiwei/work/DXA/5_contrast_"+bak+"_models/"
+    model_path="/home/xx/work/DXA/5_contrast_"+bak+"_models/"
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
