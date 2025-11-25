@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 # Construct output dataframe
 dcm_table = pd.DataFrame(columns=["folder","ID","Sex","Age","height","Weight","Ethnic","DeviceSoftware","Image"])
-# Original DXA data folder, each sample is a zip file, total 76320 files
+# Original DXA data folder, each sample is a zip file
 DXA_data_folder = "/home/xx/work/DXA/0_DXA_data"
 # Each sample is unzipped into a subdirectory; each sample may contain multiple images
 DXA_data_unzip = "/home/xx/work/DXA/0_DXA_data_unzip"
