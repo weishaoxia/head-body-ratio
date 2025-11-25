@@ -187,7 +187,7 @@ def process_part_pool(args):
     model.fc = nn.Linear(model.fc.in_features, 2)
 
     # Load weights
-    model.load_state_dict(torch.load('/home/shiwei/work/DXA/2_class_models/best_model_resnet152.pth', map_location=device))
+    model.load_state_dict(torch.load('/home/xx/work/DXA/2_class_models/best_model_resnet152.pth', map_location=device))
     model.to(device)
     model.eval()
 
@@ -215,8 +215,8 @@ def process_part_pool(args):
 def train_model():
     set_seed(seed)
     # Read manually annotated labels for constructing total-body images
-    label_df_train = pd.read_table("/home/shiwei/work/DXA/2_class_label.tsv")
-    train_path = "/home/shiwei/work/DXA/2_class_trains"
+    label_df_train = pd.read_table("/home/xx/work/DXA/2_class_label.tsv")
+    train_path = "/home/xx/work/DXA/2_class_trains"
     transform = get_transform()
     batch_size = 8
 
@@ -235,7 +235,7 @@ def train_model():
     
     # Build ResNet model
     torch.cuda.empty_cache()
-    model_path='/home/shiwei/work/DXA/2_class_models/'
+    model_path='/home/xx/work/DXA/2_class_models/'
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
@@ -343,15 +343,15 @@ def train_model():
 
 # Apply the model to all images for prediction
 def predict_all_data():
-    label_df_all = pd.read_csv("/home/shiwei/work/DXA/dcm_table.tsv", usecols=[8], sep="\t").rename(columns={"Image":"File_Name"})
+    label_df_all = pd.read_csv("/home/xx/work/DXA/dcm_table.tsv", usecols=[8], sep="\t").rename(columns={"Image":"File_Name"})
     label_df_all["Label"] = 0
     label_df_all["File_Name_npy"] = label_df_all.File_Name + ".npy"
-    raw_path = "/home/shiwei/work/DXA/1_Total_Body_npy"
+    raw_path = "/home/xx/work/DXA/1_Total_Body_npy"
 
     num_parts = 1000
     label_df_all_parts = np.array_split(label_df_all, num_parts)
 
-    save_dir = "/home/shiwei/work/DXA/2_class_pred_parts"
+    save_dir = "/home/xx/work/DXA/2_class_pred_parts"
     os.makedirs(save_dir, exist_ok=True)
 
     args_list = [
@@ -366,13 +366,13 @@ def predict_all_data():
     for file in sorted(output_files):
         results = np.load(file, allow_pickle=True)
         all_results.extend(results)
-    np.save("/home/shiwei/work/DXA/2_class_pred.npy", all_results)
+    np.save("/home/xx/work/DXA/2_class_pred.npy", all_results)
 
 # Extract whole-body skeletal images classified as 1
 def filter_and_copy_predicted():
-    label_df_all = pd.read_csv("/home/shiwei/work/DXA/dcm_table.tsv", usecols=[8], sep="\t").rename(columns={"Image":"File_Name"})
+    label_df_all = pd.read_csv("/home/xx/work/DXA/dcm_table.tsv", usecols=[8], sep="\t").rename(columns={"Image":"File_Name"})
 
-    class_pred = np.load("/home/shiwei/work/DXA/2_class_pred.npy")
+    class_pred = np.load("/home/xx/work/DXA/2_class_pred.npy")
     print(len(class_pred), flush=True)
     if len(label_df_all) != len(class_pred):
         raise ValueError(f"Length mismatch: label_df_all ({len(label_df_all)}) vs class_pred ({len(class_pred)})")
@@ -384,10 +384,10 @@ def filter_and_copy_predicted():
     label_df_pre["File_Name_npy"] = label_df_pre.File_Name + ".npy"
     label_df_pre["File_Name_png"] = label_df_pre.File_Name + ".png"
     print(len(label_df_pre), flush=True)
-    # label_df_pre.to_csv("/home/shiwei/work/DXA/2_class_pred.tsv", sep="\t", index=False, header=True)
+    # label_df_pre.to_csv("/home/xx/work/DXA/2_class_pred.tsv", sep="\t", index=False, header=True)
 
-    copy_pres_parallel("/home/shiwei/work/DXA/1_Total_Body_npy", "/home/shiwei/work/DXA/2_class_predicted_npy", label_df_pre.File_Name_npy.to_list(), max_workers=32)
-    copy_pres_parallel("/home/shiwei/work/DXA/1_Total_Body_png", "/home/shiwei/work/DXA/2_class_predicted_png", label_df_pre.File_Name_png.to_list(), max_workers=32)
+    copy_pres_parallel("/home/xx/work/DXA/1_Total_Body_npy", "/home/xx/work/DXA/2_class_predicted_npy", label_df_pre.File_Name_npy.to_list(), max_workers=32)
+    copy_pres_parallel("/home/xx/work/DXA/1_Total_Body_png", "/home/xx/work/DXA/2_class_predicted_png", label_df_pre.File_Name_png.to_list(), max_workers=32)
 
 def main():
     # Train model and test
