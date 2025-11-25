@@ -230,13 +230,13 @@ set_seed(seed)
 torch.cuda.empty_cache()
 
 # Input data paths
-png_path = "/home/shiwei/work/DXA/1_Total_Body_png"
-mask_path = "/home/shiwei/work/DXA/7_segment_masked_" + bak + "_"+ pose + "/in"
+png_path = "/home/xx/work/DXA/1_Total_Body_png"
+mask_path = "/home/xx/work/DXA/7_segment_masked_" + bak + "_"+ pose + "/in"
 
 # Output data paths
-outmask_path = "/home/shiwei/work/DXA/7_segment_trains_"+label+"_"+ bak + "_"+ pose +"/mask"
-outimg_path = "/home/shiwei/work/DXA/7_segment_trains_"+label+"_"+ bak+ "_"+ pose +"/image"
-model_path = "/home/shiwei/work/DXA/7_segment_trains_"+label+"_"+ bak+ "_"+ pose +"/models"
+outmask_path = "/home/xx/work/DXA/7_segment_trains_"+label+"_"+ bak + "_"+ pose +"/mask"
+outimg_path = "/home/xx/work/DXA/7_segment_trains_"+label+"_"+ bak+ "_"+ pose +"/image"
+model_path = "/home/xx/work/DXA/7_segment_trains_"+label+"_"+ bak+ "_"+ pose +"/models"
 
 os.makedirs(outmask_path, exist_ok=True)
 os.makedirs(outimg_path, exist_ok=True)
@@ -389,14 +389,14 @@ if not os.path.exists(best_model_name):
 
 
 # Apply model to all images for segmentation
-output_path = "/home/shiwei/work/DXA/7_segment_predicted_" + label+"_" + bak + "/"
+output_path = "/home/xx/work/DXA/7_segment_predicted_" + label+"_" + bak + "/"
 
 os.makedirs(output_path, exist_ok=True)
 model.load_state_dict(torch.load(best_model_name))
 model.to(device)
 model.eval()
 
-input_path = "/home/shiwei/work/DXA/6_pose_"+bak+"_predicted_png/"
+input_path = "/home/xx/work/DXA/6_pose_"+bak+"_predicted_png/"
 input_list = os.listdir(input_path)
 
 # Only use .png files
