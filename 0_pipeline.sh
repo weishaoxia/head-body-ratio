@@ -54,8 +54,7 @@ for label in "${label_list[@]}"; do
 done
 
 # --- Step 8: Calculate Coordinates from Segmentation Results ---
-# Calculate the coordinates of the bounding box of the segmented head and 
-# anatomical landmarks.
+# Calculate the coordinates of the bounding box of the segmented head and anatomical landmarks.
 #############################################################################
 nohup python 8_cal_segment.py black > 8_cal_segment.py_black.log &
 nohup python 8_cal_segment.py white > 8_cal_segment.py_white.log &
