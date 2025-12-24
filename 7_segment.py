@@ -374,7 +374,7 @@ if not os.path.exists(best_model_name):
             loss = criterion(outputs, labels)
             test_loss += loss.item() * inputs.size(0)
             
-            preds = segment_thresh(outputs, 0.5)
+            preds = segment_thresh(outputs, 0)
             # auc = roc_auc_score(labels[:,0].cpu().numpy().flatten(), preds.cpu().numpy().flatten())
             # test_aucs.append(auc)
             iou = calculate_iou(preds.cpu().numpy().flatten(), labels.cpu().numpy().flatten())
