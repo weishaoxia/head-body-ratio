@@ -31,6 +31,7 @@ This section details the purpose, inputs, and outputs of each script in the pipe
 - **6_pose_class.py**: Classification of head pose.
 - **7_segment.py**: Image segmentation model to identify head and anatomical landmarks.
 - **8_cal_segment.py**: Calculate the coordinates of the bounding box of the segmented head and anatomical landmarks.
+- **Cal_HBR_pipeline.py** :Automatically analyzes DXA images to perform quality control, head and body segmentation, and calculate HBRs.
 - **environment.yaml**: Contains the environment dependencies required to run the scripts.
 
 
